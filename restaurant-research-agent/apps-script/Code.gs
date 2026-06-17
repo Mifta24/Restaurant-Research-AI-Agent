@@ -23,18 +23,41 @@ function doPost(e) {
       return jsonResponse({ ok: false, error: `Sheet not found: ${SHEET_NAME}` }, 404);
     }
 
+    const existingLeadIds = getExistingLeadIds(sheet);
+    const newLeads = cleanLeads.filter(
+      (lead) => !lead.leadId || !existingLeadIds.has(String(lead.leadId)),
+    );
+    const duplicatesSkipped = cleanLeads.length - newLeads.length;
+
+    if (newLeads.length === 0) {
+      return jsonResponse({ ok: true, inserted: 0, duplicatesSkipped });
+    }
+
     const startRow = findFirstEmptyLeadRow(sheet);
-    const rows = cleanLeads.map((lead, index) => mapLeadToRow(lead, startRow + index));
+    const rows = newLeads.map((lead, index) => mapLeadToRow(lead, startRow + index));
     sheet.getRange(startRow, 1, rows.length, EXPECTED_COLUMNS).setValues(rows);
 
     return jsonResponse({
       ok: true,
       inserted: rows.length,
+      duplicatesSkipped,
       startRow,
     });
   } catch (error) {
     return jsonResponse({ ok: false, error: String(error) }, 500);
   }
+}
+
+function getExistingLeadIds(sheet) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return new Set();
+
+  const leadIdValues = sheet.getRange(2, 3, lastRow - 1, 1).getValues();
+  const ids = new Set();
+  leadIdValues.forEach((row) => {
+    if (row[0]) ids.add(String(row[0]));
+  });
+  return ids;
 }
 
 function findFirstEmptyLeadRow(sheet) {
