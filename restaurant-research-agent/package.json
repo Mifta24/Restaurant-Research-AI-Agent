@@ -1,0 +1,24 @@
+{
+  "name": "restaurant-research-agent",
+  "version": "1.0.0",
+  "description": "Business-first Jakarta restaurant lead research agent for FTS.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "batch": "node src/index.js",
+    "test:dummy": "node src/testDummyLead.js"
+  },
+  "keywords": [
+    "restaurant",
+    "lead-generation",
+    "overpass",
+    "google-sheets"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.7.9",
+    "dotenv": "^16.4.7",
+    "node-cron": "^3.0.3"
+  }
+}
