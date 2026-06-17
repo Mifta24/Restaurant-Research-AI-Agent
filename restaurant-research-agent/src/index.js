@@ -36,6 +36,9 @@ async function enrichPriorityALeads(leads) {
   let generated = 0;
   const enriched = [];
 
+  const priorityACount = leads.filter((lead) => lead.priority === "Priority A").length;
+  console.log(`Generating AI sales notes for up to ${Math.min(maxNotes, priorityACount)} Priority A leads...`);
+
   for (const lead of leads) {
     if (lead.priority !== "Priority A" || generated >= maxNotes) {
       enriched.push(lead);
@@ -51,6 +54,7 @@ async function enrichPriorityALeads(leads) {
       outreachMessage: notes.outreachMessage || "",
     });
     generated += 1;
+    console.log(`  -> [${generated}/${maxNotes}] notes generated for ${lead.restaurantName || lead.leadId}`);
   }
 
   return enriched;
@@ -63,11 +67,23 @@ async function runBatch() {
   }
 
   const batchLimit = Number(process.env.BATCH_LIMIT || 50);
+
+  console.log(`Starting batch for ${targets.length} target area(s): ${targets.map((t) => t.name).join(", ")}`);
+
   const rawElements = await fetchJakartaRestaurants(targets);
+  console.log(`Fetched ${rawElements.length} raw places total.`);
+
   const normalized = dedupeLeads(rawElements.map(normalizeElement));
+  console.log(`Normalized + deduped to ${normalized.length} unique leads.`);
+
   const scored = normalized.map(applyScoring).slice(0, batchLimit);
+  console.log(`Scored leads, keeping top ${scored.length} (batch limit ${batchLimit}).`);
+
   const enriched = await enrichPriorityALeads(scored);
+
+  console.log("Posting leads to Google Sheet...");
   const result = await postLeadsToSheet(enriched);
+  console.log("Done posting to sheet.");
 
   console.log(
     JSON.stringify(

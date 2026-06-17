@@ -59,6 +59,46 @@ const TARGET_AREAS = [
       east: 106.845,
     },
   },
+  {
+    name: "Puri Indah",
+    cityArea: "Jakarta Barat",
+    bbox: {
+      south: -6.2,
+      west: 106.725,
+      north: -6.174,
+      east: 106.751,
+    },
+  },
+  {
+    name: "Kebon Jeruk",
+    cityArea: "Jakarta Barat",
+    bbox: {
+      south: -6.208,
+      west: 106.754,
+      north: -6.182,
+      east: 106.78,
+    },
+  },
+  {
+    name: "Cawang",
+    cityArea: "Jakarta Timur",
+    bbox: {
+      south: -6.256,
+      west: 106.856,
+      north: -6.23,
+      east: 106.882,
+    },
+  },
+  {
+    name: "Pulogadung",
+    cityArea: "Jakarta Timur",
+    bbox: {
+      south: -6.203,
+      west: 106.893,
+      north: -6.177,
+      east: 106.919,
+    },
+  },
 ];
 
 function selectedTargets() {

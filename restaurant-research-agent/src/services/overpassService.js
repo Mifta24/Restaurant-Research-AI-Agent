@@ -53,8 +53,10 @@ async function fetchRestaurantsForTarget(target) {
 async function fetchJakartaRestaurants(targets) {
   const batches = [];
 
-  for (const target of targets) {
+  for (const [index, target] of targets.entries()) {
+    console.log(`[${index + 1}/${targets.length}] Fetching ${target.name} (${target.cityArea})...`);
     const restaurants = await fetchRestaurantsForTarget(target);
+    console.log(`  -> found ${restaurants.length} places in ${target.name}`);
     batches.push(...restaurants);
   }
 
