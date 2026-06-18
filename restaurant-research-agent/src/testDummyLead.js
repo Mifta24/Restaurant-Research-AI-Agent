@@ -31,6 +31,17 @@ const dummyLead = {
   nextFollowUpDate: "",
   replyNotes: "",
   sourceUrl: "https://example.com/dummy-lead",
+  diagnosis: {
+    restaurantName: "Dummy Jakarta Restaurant",
+    currentSituation:
+      "Website: Missing. Instagram: Need Check. WhatsApp/contact: Found. Location: Clear.",
+    mainProblem:
+      "Restaurant does not have a clear owned website in the collected data.",
+    improvementSuggestion:
+      "Start with a simple professional landing page or website that shows menu highlights, location, and WhatsApp contact clearly.",
+    recommendedFtsService: "Basic",
+    priority: "Priority A",
+  },
 };
 
 postLeadsToSheet([dummyLead])

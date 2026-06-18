@@ -2,6 +2,11 @@
 
 Business-first Jakarta restaurant lead research agent for FTS.
 
+## Agents
+
+- Agent 1: Restaurant research and lead scoring batch agent.
+- Agent 2: Restaurant diagnosis analyst agent.
+
 ## Google Sheet
 
 Imported native Google Sheet:
@@ -49,8 +54,80 @@ Default first batch:
 - Limit: 50 leads
 - AI notes: disabled until `ENABLE_AI_NOTES=true`
 
+## Agent 2: Restaurant Diagnosis Agent
+
+Agent 2 runs after restaurant data is collected and scored. Its job is to diagnose the restaurant's current digital marketing condition, not just list the restaurant name.
+
+It checks the available lead signals:
+
+- website presence and whether the website signal looks weak
+- Instagram availability
+- WhatsApp or phone availability
+- location clarity
+- menu, reservation, website quality, and branding gaps that still need manual review
+
+The diagnosis is sent to the Google Sheet tab `Diagnosa Report`. If the tab does not exist, the Apps Script webhook creates it with these columns:
+
+- `No`
+- `Created At`
+- `Lead ID`
+- `Restaurant Name`
+- `Current Situation`
+- `Main Problem`
+- `Improvement Suggestion`
+- `Recommended FTS Service`
+- `Priority`
+
+The package recommendation is also stored on the lead as `recommendedService`, and the diagnosis priority updates `priority`.
+
+Output format:
+
+```text
+Restaurant Name:
+Current Situation:
+Main Problem:
+Improvement Suggestion:
+Recommended FTS Service:
+Priority:
+```
+
+Recommended FTS service values:
+
+- `Basic`: for restaurants that need a landing page or simple website
+- `Middle`: for restaurants that need website improvement, WhatsApp flow, and basic AI response
+- `Premium`: for restaurants ready for AI chatbot, reservation system, and broader automation
+
+Configure `.env`:
+
+```bash
+OPENROUTER_API_KEY=your-project-testing-key
+ENABLE_DIAGNOSIS_AGENT=true
+DIAGNOSIS_USE_AI=true
+DIAGNOSIS_MODEL=openai/gpt-4o-mini
+DIAGNOSIS_FALLBACK_MODEL=
+DIAGNOSIS_MAX_LEADS=20
+```
+
+Run a local diagnosis test:
+
+```bash
+npm run test:diagnosis -- "Dummy Jakarta Restaurant"
+```
+
+Run a batch with diagnosis enabled:
+
+```bash
+npm run batch
+```
+
+After changing `apps-script/Code.gs`, redeploy the Apps Script web app so the Sheet webhook can write to `Diagnosa Report`.
+
 ## Flow
 
 ```text
 Node.js Agent -> Apps Script Webhook -> Lead List sheet
+```
+
+```text
+Collected Restaurant Lead -> Diagnosis Agent -> Google Sheet diagnosis columns
 ```

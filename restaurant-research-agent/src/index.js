@@ -5,6 +5,10 @@ const { selectedTargets } = require("./config/targets");
 const { fetchJakartaRestaurants } = require("./services/overpassService");
 const { applyScoring } = require("./services/scoringService");
 const { generateSalesNotes } = require("./services/openRouterService");
+const {
+  diagnoseRestaurant,
+  formatDiagnosis,
+} = require("./services/diagnosisService");
 const { postLeadsToSheet } = require("./services/googleSheetService");
 const { dedupeLeads, normalizeElement } = require("./utils/normalizer");
 
@@ -60,6 +64,41 @@ async function enrichPriorityALeads(leads) {
   return enriched;
 }
 
+async function diagnoseLeads(leads) {
+  if (process.env.ENABLE_DIAGNOSIS_AGENT !== "true") {
+    return leads;
+  }
+
+  const maxDiagnoses = Number(process.env.DIAGNOSIS_MAX_LEADS || 20);
+  let generated = 0;
+  const diagnosed = [];
+
+  console.log(`Running Restaurant Diagnosis Agent for up to ${Math.min(maxDiagnoses, leads.length)} leads...`);
+
+  for (const lead of leads) {
+    if (generated >= maxDiagnoses) {
+      diagnosed.push(lead);
+      continue;
+    }
+
+    const diagnosis = await diagnoseRestaurant(lead);
+    diagnosed.push({
+      ...lead,
+      diagnosis,
+      diagnosisReport: formatDiagnosis(diagnosis),
+      recommendedService: diagnosis.recommendedFtsService,
+      priority: diagnosis.priority || lead.priority,
+      manualCheckNotes: Array.isArray(diagnosis.evidenceGaps)
+        ? diagnosis.evidenceGaps.join(" ")
+        : lead.manualCheckNotes,
+    });
+    generated += 1;
+    console.log(`  -> [${generated}/${maxDiagnoses}] diagnosis generated for ${lead.restaurantName || lead.leadId}`);
+  }
+
+  return diagnosed;
+}
+
 async function runBatch() {
   const targets = selectedTargets();
   if (targets.length === 0) {
@@ -79,7 +118,14 @@ async function runBatch() {
   const scored = normalized.map(applyScoring).slice(0, batchLimit);
   console.log(`Scored leads, keeping top ${scored.length} (batch limit ${batchLimit}).`);
 
-  const enriched = await enrichPriorityALeads(scored);
+  const salesEnriched = await enrichPriorityALeads(scored);
+  const enriched = await diagnoseLeads(salesEnriched);
+  const diagnosisPayloadCount = enriched.filter(
+    (lead) => lead.diagnosis || lead.diagnosisReport,
+  ).length;
+  if (process.env.ENABLE_DIAGNOSIS_AGENT === "true") {
+    console.log(`Prepared ${diagnosisPayloadCount} diagnosis payload(s) for Google Sheet.`);
+  }
 
   console.log("Posting leads to Google Sheet...");
   const result = await postLeadsToSheet(enriched);
