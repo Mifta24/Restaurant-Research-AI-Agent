@@ -27,9 +27,9 @@ const dummyLead = {
     "Halo Dummy Jakarta Restaurant, kami bantu restoran memperbaiki landing page, menu online, dan tombol WhatsApp agar lebih mudah dihubungi pelanggan.",
   outreachStatus: "Not Contacted",
   leadStatus: "New",
-  lastContactDate: "",
+  lastContactDate: new Date().toISOString().slice(0, 10),
   nextFollowUpDate: "",
-  replyNotes: "",
+  replyNotes: "Boleh, kirim detailnya.",
   sourceUrl: "https://example.com/dummy-lead",
   diagnosis: {
     restaurantName: "Dummy Jakarta Restaurant",
@@ -64,6 +64,21 @@ const dummyLead = {
       "Idea to improve Dummy Jakarta Restaurant's online customer journey",
     emailBodyEn:
       "Hi Dummy Jakarta Restaurant team,\n\nWe are FTS AI, and we help restaurants build a simple website that shows the menu, location, and WhatsApp or reservation button.\n\nIf helpful, we can send a short concept tailored to your current online presence.",
+  },
+  followUp: {
+    restaurantName: "Dummy Jakarta Restaurant",
+    replyText: "Boleh, kirim detailnya.",
+    classification: "Interested",
+    recommendedAction:
+      "Send the most relevant package explanation and offer a meeting.",
+    nextMessage:
+      "Terima kasih, tim Dummy Jakarta Restaurant. Saya kirimkan detail paket Basic yang relevan untuk kondisi Dummy Jakarta Restaurant, termasuk opsi setup website, WhatsApp/reservasi, dan dukungan AI sesuai kebutuhan.",
+    reminderDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10),
+    confidence: "High",
+    reason:
+      "The reply asks for more detail, which indicates interest.",
   },
 };
 

@@ -8,6 +8,7 @@
     "batch": "node src/index.js",
     "test:diagnosis": "node src/testRestaurantDiagnosis.js",
     "test:sales-message": "node src/testSalesMessageAgent.js",
+    "test:follow-up": "node src/testFollowUpAgent.js",
     "test:dummy": "node src/testDummyLead.js"
   },
   "keywords": [

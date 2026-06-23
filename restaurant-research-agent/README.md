@@ -7,6 +7,7 @@ Business-first Jakarta restaurant lead research agent for FTS.
 - Agent 1: Restaurant research and lead scoring batch agent.
 - Agent 2: Restaurant diagnosis analyst agent.
 - Agent 3: Sales message copywriter agent.
+- Agent 4: Follow-up reply classifier and next-action agent.
 
 ## Google Sheet
 
@@ -182,6 +183,82 @@ npm run batch
 
 After changing `apps-script/Code.gs`, redeploy the Apps Script web app so the Sheet webhook can write to `Sales Messages`.
 
+## Agent 4: Follow-up Agent
+
+Agent 4 runs after a restaurant replies to outreach. Its job is to keep the sales process tidy by classifying the reply and creating the next recommended action.
+
+It classifies replies into:
+
+- `Interested`: the restaurant asks for details, pricing, packages, or a proposal
+- `Contact Later`: the restaurant asks to continue later, such as next week or next month
+- `Not Interested`: the restaurant declines, asks to stop, or says they already have a solution
+- `Need Meeting`: the restaurant asks for or implies a meeting, call, demo, or schedule
+
+The agent reads reply text from these lead fields, in order:
+
+- `customerReply`
+- `replyText`
+- `latestReply`
+- `replyNotes`
+
+The output is sent to the Google Sheet tab `Follow Up Actions`. If the tab does not exist, the Apps Script webhook creates it with these columns:
+
+- `No`
+- `Created At`
+- `Lead ID`
+- `Restaurant Name`
+- `Reply Received At`
+- `Reply Text`
+- `Classification`
+- `Recommended Action`
+- `Next Message`
+- `Reminder Date`
+- `Confidence`
+- `Reason`
+
+Example behavior:
+
+```text
+Reply: Boleh, kirim detailnya.
+Classification: Interested
+Next action: Send package details and offer a short meeting.
+```
+
+```text
+Reply: Mungkin bulan depan.
+Classification: Contact Later
+Next action: Create a reminder and follow up near the requested time.
+```
+
+Configure `.env`:
+
+```bash
+ENABLE_FOLLOW_UP_AGENT=true
+FOLLOW_UP_USE_AI=true
+FOLLOW_UP_MODEL=openai/gpt-4o-mini
+FOLLOW_UP_FALLBACK_MODEL=
+FOLLOW_UP_MAX_LEADS=20
+FOLLOW_UP_TEMPERATURE=0.2
+FOLLOW_UP_MAX_TOKENS=800
+```
+
+`FOLLOW_UP_USE_AI=false` or a missing `OPENROUTER_API_KEY` will use the local fallback classifier, so reply classification still works for common Indonesian and English responses.
+
+Run a local Agent 4 test:
+
+```bash
+npm run test:follow-up -- "Boleh, kirim detailnya."
+npm run test:follow-up -- "Mungkin bulan depan."
+```
+
+Run a batch with follow-up enabled:
+
+```bash
+npm run batch
+```
+
+Only leads with reply text are processed by Agent 4. After changing `apps-script/Code.gs`, redeploy the Apps Script web app so the Sheet webhook can write to `Follow Up Actions`.
+
 ## Flow
 
 ```text
@@ -194,4 +271,8 @@ Collected Restaurant Lead -> Diagnosis Agent -> Google Sheet diagnosis columns
 
 ```text
 Diagnosed Restaurant Lead -> Sales Message Agent -> Google Sheet outreach message variants
+```
+
+```text
+Replied Restaurant Lead -> Follow-up Agent -> Google Sheet reply classification and next action
 ```

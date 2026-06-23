@@ -1,9 +1,11 @@
 const SHEET_NAME = 'Lead List';
 const DIAGNOSIS_SHEET_NAME = 'Diagnosa Report';
 const SALES_MESSAGE_SHEET_NAME = 'Sales Messages';
+const FOLLOW_UP_SHEET_NAME = 'Follow Up Actions';
 const EXPECTED_COLUMNS = 27;
 const DIAGNOSIS_EXPECTED_COLUMNS = 9;
 const SALES_MESSAGE_EXPECTED_COLUMNS = 15;
+const FOLLOW_UP_EXPECTED_COLUMNS = 12;
 const DEFAULT_SPREADSHEET_ID = '1rwV6Q83zwZeWzxekFo3Qu9B3qC8hi5I6kEz7nEtim8s';
 const DIAGNOSIS_HEADERS = [
   'No',
@@ -32,6 +34,20 @@ const SALES_MESSAGE_HEADERS = [
   'Instagram DM EN',
   'Email Subject EN',
   'Email Body EN',
+];
+const FOLLOW_UP_HEADERS = [
+  'No',
+  'Created At',
+  'Lead ID',
+  'Restaurant Name',
+  'Reply Received At',
+  'Reply Text',
+  'Classification',
+  'Recommended Action',
+  'Next Message',
+  'Reminder Date',
+  'Confidence',
+  'Reason',
 ];
 
 function doPost(e) {
@@ -62,6 +78,7 @@ function doPost(e) {
     const duplicatesSkipped = cleanLeads.length - newLeads.length;
     const diagnosisRowsWritten = writeDiagnosisReports(cleanLeads);
     const salesMessageRowsWritten = writeSalesMessages(cleanLeads);
+    const followUpRowsWritten = writeFollowUps(cleanLeads);
 
     if (newLeads.length === 0) {
       return jsonResponse({
@@ -70,6 +87,7 @@ function doPost(e) {
         duplicatesSkipped,
         diagnosisRowsWritten,
         salesMessageRowsWritten,
+        followUpRowsWritten,
       });
     }
 
@@ -83,6 +101,7 @@ function doPost(e) {
       duplicatesSkipped,
       diagnosisRowsWritten,
       salesMessageRowsWritten,
+      followUpRowsWritten,
       startRow,
     });
   } catch (error) {
@@ -158,6 +177,40 @@ function writeSalesMessages(leads) {
   return rowsWritten;
 }
 
+function writeFollowUps(leads) {
+  const followUpLeads = leads.filter((lead) => lead.followUp || lead.followUpReport);
+  if (followUpLeads.length === 0) return 0;
+
+  const sheet = getOrCreateFollowUpSheet();
+  const existingLeadRows = getExistingFollowUpLeadRows(sheet);
+  let rowsWritten = 0;
+  const newFollowUpLeads = [];
+
+  followUpLeads.forEach((lead) => {
+    const existingRow = lead.leadId ? existingLeadRows[String(lead.leadId)] : null;
+    if (!existingRow) {
+      newFollowUpLeads.push(lead);
+      return;
+    }
+
+    sheet.getRange(existingRow, 1, 1, FOLLOW_UP_EXPECTED_COLUMNS).setValues([
+      mapFollowUpToRow(lead, existingRow),
+    ]);
+    rowsWritten += 1;
+  });
+
+  if (newFollowUpLeads.length > 0) {
+    const startRow = findFirstEmptyFollowUpRow(sheet);
+    const rows = newFollowUpLeads.map((lead, index) => mapFollowUpToRow(lead, startRow + index));
+    sheet.getRange(startRow, 1, rows.length, FOLLOW_UP_EXPECTED_COLUMNS).setValues(rows);
+    rowsWritten += rows.length;
+  }
+
+  applyFollowUpSheetDesign(sheet);
+
+  return rowsWritten;
+}
+
 function getOrCreateDiagnosisSheet() {
   const spreadsheet = getTargetSpreadsheet();
   let sheet = spreadsheet.getSheetByName(DIAGNOSIS_SHEET_NAME);
@@ -194,6 +247,26 @@ function getOrCreateSalesMessageSheet() {
   }
 
   applySalesMessageSheetDesign(sheet);
+
+  return sheet;
+}
+
+function getOrCreateFollowUpSheet() {
+  const spreadsheet = getTargetSpreadsheet();
+  let sheet = spreadsheet.getSheetByName(FOLLOW_UP_SHEET_NAME);
+
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(FOLLOW_UP_SHEET_NAME);
+  }
+
+  const firstRow = sheet.getRange(1, 1, 1, FOLLOW_UP_EXPECTED_COLUMNS).getValues()[0];
+  const hasHeader = firstRow.some((value) => Boolean(value));
+
+  if (!hasHeader) {
+    sheet.getRange(1, 1, 1, FOLLOW_UP_EXPECTED_COLUMNS).setValues([FOLLOW_UP_HEADERS]);
+  }
+
+  applyFollowUpSheetDesign(sheet);
 
   return sheet;
 }
@@ -282,7 +355,62 @@ function applySalesMessageSheetDesign(sheet) {
   }
 }
 
+function applyFollowUpSheetDesign(sheet) {
+  sheet.setFrozenRows(1);
+  sheet.getRange(1, 1, 1, FOLLOW_UP_EXPECTED_COLUMNS).setValues([FOLLOW_UP_HEADERS]);
+
+  const headerRange = sheet.getRange(1, 1, 1, FOLLOW_UP_EXPECTED_COLUMNS);
+  headerRange
+    .setBackground('#7A3E00')
+    .setFontColor('#FFFFFF')
+    .setFontWeight('bold')
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle')
+    .setWrap(true);
+
+  sheet.setRowHeight(1, 46);
+  sheet.setColumnWidth(1, 48);
+  sheet.setColumnWidth(2, 150);
+  sheet.setColumnWidth(3, 180);
+  sheet.setColumnWidth(4, 220);
+  sheet.setColumnWidth(5, 150);
+  sheet.setColumnWidth(6, 360);
+  sheet.setColumnWidth(7, 150);
+  sheet.setColumnWidth(8, 360);
+  sheet.setColumnWidth(9, 520);
+  sheet.setColumnWidth(10, 130);
+  sheet.setColumnWidth(11, 110);
+  sheet.setColumnWidth(12, 320);
+
+  const lastRow = Math.max(sheet.getLastRow(), 2);
+  const bodyRange = sheet.getRange(2, 1, lastRow - 1, FOLLOW_UP_EXPECTED_COLUMNS);
+  bodyRange
+    .setWrap(true)
+    .setVerticalAlignment('top')
+    .setHorizontalAlignment('left');
+
+  sheet.getRange(2, 1, lastRow - 1, 1).setHorizontalAlignment('center');
+  sheet.getRange(2, 7, lastRow - 1, 1).setHorizontalAlignment('center');
+  sheet.getRange(2, 10, lastRow - 1, 2).setHorizontalAlignment('center');
+
+  if (lastRow > 1) {
+    sheet.autoResizeRows(2, lastRow - 1);
+  }
+}
+
 function getExistingDiagnosisLeadRows(sheet) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return {};
+
+  const leadIdValues = sheet.getRange(2, 3, lastRow - 1, 1).getValues();
+  const rowsByLeadId = {};
+  leadIdValues.forEach((row, index) => {
+    if (row[0]) rowsByLeadId[String(row[0])] = index + 2;
+  });
+  return rowsByLeadId;
+}
+
+function getExistingFollowUpLeadRows(sheet) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return {};
 
@@ -323,6 +451,22 @@ function findFirstEmptyDiagnosisRow(sheet) {
 }
 
 function findFirstEmptySalesMessageRow(sheet) {
+  const lastRow = Math.max(sheet.getLastRow(), 2);
+  const rowCount = lastRow - 1;
+  const leadIdAndNameValues = sheet.getRange(2, 3, rowCount, 2).getValues();
+
+  for (let index = 0; index < leadIdAndNameValues.length; index += 1) {
+    const leadId = leadIdAndNameValues[index][0];
+    const restaurantName = leadIdAndNameValues[index][1];
+    if (!leadId && !restaurantName) {
+      return index + 2;
+    }
+  }
+
+  return lastRow + 1;
+}
+
+function findFirstEmptyFollowUpRow(sheet) {
   const lastRow = Math.max(sheet.getLastRow(), 2);
   const rowCount = lastRow - 1;
   const leadIdAndNameValues = sheet.getRange(2, 3, rowCount, 2).getValues();
@@ -442,6 +586,25 @@ function mapSalesMessageToRow(lead, rowNumber) {
   ];
 }
 
+function mapFollowUpToRow(lead, rowNumber) {
+  const followUp = lead.followUp || parseFollowUpReport(lead.followUpReport || '');
+
+  return [
+    rowNumber - 1,
+    lead.createdAt || new Date().toISOString(),
+    lead.leadId || '',
+    followUp.restaurantName || lead.restaurantName || '',
+    lead.replyReceivedAt || lead.lastContactDate || '',
+    followUp.replyText || lead.customerReply || lead.replyText || lead.latestReply || lead.replyNotes || '',
+    followUp.classification || '',
+    followUp.recommendedAction || '',
+    followUp.nextMessage || '',
+    followUp.reminderDate || lead.nextFollowUpDate || '',
+    followUp.confidence || '',
+    followUp.reason || '',
+  ];
+}
+
 function parseDiagnosisReport(report) {
   const diagnosis = {};
   String(report || '').split('\n').forEach((line) => {
@@ -484,6 +647,27 @@ function parseSalesMessageReport(report) {
     if (key === 'email body en') messages.emailBodyEn = value;
   });
   return messages;
+}
+
+function parseFollowUpReport(report) {
+  const followUp = {};
+  String(report || '').split('\n').forEach((line) => {
+    const separatorIndex = line.indexOf(':');
+    if (separatorIndex === -1) return;
+
+    const key = line.slice(0, separatorIndex).trim().toLowerCase();
+    const value = line.slice(separatorIndex + 1).trim();
+
+    if (key === 'restaurant name') followUp.restaurantName = value;
+    if (key === 'reply text') followUp.replyText = value;
+    if (key === 'classification') followUp.classification = value;
+    if (key === 'recommended action') followUp.recommendedAction = value;
+    if (key === 'next message') followUp.nextMessage = value;
+    if (key === 'reminder date') followUp.reminderDate = value;
+    if (key === 'confidence') followUp.confidence = value;
+    if (key === 'reason') followUp.reason = value;
+  });
+  return followUp;
 }
 
 function jsonResponse(body, statusCode) {

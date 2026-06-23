@@ -13,6 +13,11 @@ const {
   generateSalesMessages,
   formatSalesMessages,
 } = require("./services/salesMessageService");
+const {
+  classifyFollowUpReply,
+  formatFollowUp,
+  replyText,
+} = require("./services/followUpService");
 const { postLeadsToSheet } = require("./services/googleSheetService");
 const { dedupeLeads, normalizeElement } = require("./utils/normalizer");
 
@@ -134,6 +139,43 @@ async function generateSalesMessagesForLeads(leads) {
   return enriched;
 }
 
+async function classifyFollowUpsForLeads(leads) {
+  if (process.env.ENABLE_FOLLOW_UP_AGENT !== "true") {
+    return leads;
+  }
+
+  const replyLeads = leads.filter((lead) => replyText(lead));
+  const maxFollowUps = Number(process.env.FOLLOW_UP_MAX_LEADS || 20);
+  let generated = 0;
+  const enriched = [];
+
+  console.log(`Running Follow-up Agent for up to ${Math.min(maxFollowUps, replyLeads.length)} replied lead(s)...`);
+
+  for (const lead of leads) {
+    if (!replyText(lead) || generated >= maxFollowUps) {
+      enriched.push(lead);
+      continue;
+    }
+
+    const followUp = await classifyFollowUpReply(lead);
+    enriched.push({
+      ...lead,
+      followUp,
+      followUpReport: formatFollowUp(followUp),
+      leadStatus: followUp.classification,
+      outreachStatus:
+        followUp.classification === "Not Interested" ? "Closed" : "Replied",
+      nextFollowUpDate:
+        followUp.reminderDate || lead.nextFollowUpDate || "",
+      outreachMessage: followUp.nextMessage || lead.outreachMessage,
+    });
+    generated += 1;
+    console.log(`  -> [${generated}/${maxFollowUps}] follow-up classified for ${lead.restaurantName || lead.leadId}`);
+  }
+
+  return enriched;
+}
+
 async function runBatch() {
   const targets = selectedTargets();
   if (targets.length === 0) {
@@ -155,18 +197,25 @@ async function runBatch() {
 
   const salesEnriched = await enrichPriorityALeads(scored);
   const diagnosed = await diagnoseLeads(salesEnriched);
-  const enriched = await generateSalesMessagesForLeads(diagnosed);
+  const messageEnriched = await generateSalesMessagesForLeads(diagnosed);
+  const enriched = await classifyFollowUpsForLeads(messageEnriched);
   const diagnosisPayloadCount = diagnosed.filter(
     (lead) => lead.diagnosis || lead.diagnosisReport,
   ).length;
   const salesMessagePayloadCount = enriched.filter(
     (lead) => lead.salesMessages || lead.salesMessageReport,
   ).length;
+  const followUpPayloadCount = enriched.filter(
+    (lead) => lead.followUp || lead.followUpReport,
+  ).length;
   if (process.env.ENABLE_DIAGNOSIS_AGENT === "true") {
     console.log(`Prepared ${diagnosisPayloadCount} diagnosis payload(s) for Google Sheet.`);
   }
   if (process.env.ENABLE_SALES_MESSAGE_AGENT === "true") {
     console.log(`Prepared ${salesMessagePayloadCount} sales message payload(s) for Google Sheet.`);
+  }
+  if (process.env.ENABLE_FOLLOW_UP_AGENT === "true") {
+    console.log(`Prepared ${followUpPayloadCount} follow-up payload(s) for Google Sheet.`);
   }
 
   console.log("Posting leads to Google Sheet...");
