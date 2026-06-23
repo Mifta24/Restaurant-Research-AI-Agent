@@ -6,6 +6,7 @@ Business-first Jakarta restaurant lead research agent for FTS.
 
 - Agent 1: Restaurant research and lead scoring batch agent.
 - Agent 2: Restaurant diagnosis analyst agent.
+- Agent 3: Sales message copywriter agent.
 
 ## Google Sheet
 
@@ -122,6 +123,65 @@ npm run batch
 
 After changing `apps-script/Code.gs`, redeploy the Apps Script web app so the Sheet webhook can write to `Diagnosa Report`.
 
+## Agent 3: Sales Message Agent
+
+Agent 3 runs after the restaurant has been scored and diagnosed. Its job is to create natural outreach copy that feels personal and professional, not hard selling.
+
+It creates message variants for:
+
+- WhatsApp message in Indonesian
+- Instagram DM in Indonesian
+- Email subject and body in Indonesian
+- WhatsApp message in English
+- Instagram DM in English
+- Email subject and body in English
+
+The messages use the available lead and diagnosis signals only. The agent should not invent ratings, revenue, traffic, Google Maps reviews, or reputation claims that are not in the collected data.
+
+The output is sent to the Google Sheet tab `Sales Messages`. If the tab does not exist, the Apps Script webhook creates it with these columns:
+
+- `No`
+- `Created At`
+- `Lead ID`
+- `Restaurant Name`
+- `Recommended FTS Service`
+- `Personalization Signal`
+- `Outreach Angle`
+- `WhatsApp ID`
+- `Instagram DM ID`
+- `Email Subject ID`
+- `Email Body ID`
+- `WhatsApp EN`
+- `Instagram DM EN`
+- `Email Subject EN`
+- `Email Body EN`
+
+Configure `.env`:
+
+```bash
+ENABLE_SALES_MESSAGE_AGENT=true
+SALES_MESSAGE_USE_AI=true
+SALES_MESSAGE_MODEL=openai/gpt-4o-mini
+SALES_MESSAGE_FALLBACK_MODEL=
+SALES_MESSAGE_MAX_LEADS=20
+```
+
+`SALES_MESSAGE_USE_AI=false` or a missing `OPENROUTER_API_KEY` will use the local fallback message generator, so the workflow can still produce usable outreach drafts.
+
+Run a local Agent 3 test:
+
+```bash
+npm run test:sales-message -- "Dummy Jakarta Restaurant"
+```
+
+Run a batch with diagnosis and sales messages enabled:
+
+```bash
+npm run batch
+```
+
+After changing `apps-script/Code.gs`, redeploy the Apps Script web app so the Sheet webhook can write to `Sales Messages`.
+
 ## Flow
 
 ```text
@@ -130,4 +190,8 @@ Node.js Agent -> Apps Script Webhook -> Lead List sheet
 
 ```text
 Collected Restaurant Lead -> Diagnosis Agent -> Google Sheet diagnosis columns
+```
+
+```text
+Diagnosed Restaurant Lead -> Sales Message Agent -> Google Sheet outreach message variants
 ```

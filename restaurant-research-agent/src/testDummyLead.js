@@ -42,6 +42,29 @@ const dummyLead = {
     recommendedFtsService: "Basic",
     priority: "Priority A",
   },
+  salesMessages: {
+    restaurantName: "Dummy Jakarta Restaurant",
+    recommendedFtsService: "Basic",
+    personalizationSignal:
+      "Restaurant does not have a clear owned website in the collected data.",
+    outreachAngle:
+      "Professional, helpful outreach focused on improving the restaurant's online customer journey.",
+    whatsappId:
+      "Halo Dummy Jakarta Restaurant, saya dari FTS AI. Kami melihat restoran Anda sudah punya profil lokasi online, tetapi belum terlihat punya website resmi yang rapi. Kami bisa bantu membuat website sederhana yang menampilkan menu, lokasi, dan tombol WhatsApp atau reservasi supaya calon customer lebih mudah melihat info penting.",
+    instagramDmId:
+      "Halo Dummy Jakarta Restaurant, izin kenalan. Kami membantu restoran merapikan tampilan online seperti menu, lokasi, dan jalur WhatsApp/reservasi agar calon customer lebih mudah mengambil keputusan.",
+    emailSubjectId: "Ide merapikan sistem online untuk Dummy Jakarta Restaurant",
+    emailBodyId:
+      "Halo tim Dummy Jakarta Restaurant,\n\nKami dari FTS AI membantu restoran membuat website sederhana yang menampilkan menu, lokasi, dan tombol WhatsApp atau reservasi.\n\nJika berkenan, kami bisa kirimkan contoh konsep singkat.",
+    whatsappEn:
+      "Hi Dummy Jakarta Restaurant, this is FTS AI. We noticed that your restaurant has an online location presence, but we did not see a clear official website. We help restaurants build a simple website that shows the menu, location, and WhatsApp or reservation button.",
+    instagramDmEn:
+      "Hi Dummy Jakarta Restaurant, nice to connect. We help restaurants organize their online menu, location, and WhatsApp/reservation path so customers can decide more easily.",
+    emailSubjectEn:
+      "Idea to improve Dummy Jakarta Restaurant's online customer journey",
+    emailBodyEn:
+      "Hi Dummy Jakarta Restaurant team,\n\nWe are FTS AI, and we help restaurants build a simple website that shows the menu, location, and WhatsApp or reservation button.\n\nIf helpful, we can send a short concept tailored to your current online presence.",
+  },
 };
 
 postLeadsToSheet([dummyLead])

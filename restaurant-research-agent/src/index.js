@@ -9,6 +9,10 @@ const {
   diagnoseRestaurant,
   formatDiagnosis,
 } = require("./services/diagnosisService");
+const {
+  generateSalesMessages,
+  formatSalesMessages,
+} = require("./services/salesMessageService");
 const { postLeadsToSheet } = require("./services/googleSheetService");
 const { dedupeLeads, normalizeElement } = require("./utils/normalizer");
 
@@ -99,6 +103,37 @@ async function diagnoseLeads(leads) {
   return diagnosed;
 }
 
+async function generateSalesMessagesForLeads(leads) {
+  if (process.env.ENABLE_SALES_MESSAGE_AGENT !== "true") {
+    return leads;
+  }
+
+  const maxMessages = Number(process.env.SALES_MESSAGE_MAX_LEADS || 20);
+  let generated = 0;
+  const enriched = [];
+
+  console.log(`Running Sales Message Agent for up to ${Math.min(maxMessages, leads.length)} leads...`);
+
+  for (const lead of leads) {
+    if (generated >= maxMessages) {
+      enriched.push(lead);
+      continue;
+    }
+
+    const salesMessages = await generateSalesMessages(lead);
+    enriched.push({
+      ...lead,
+      salesMessages,
+      salesMessageReport: formatSalesMessages(salesMessages),
+      outreachMessage: salesMessages.whatsappId || lead.outreachMessage,
+    });
+    generated += 1;
+    console.log(`  -> [${generated}/${maxMessages}] sales messages generated for ${lead.restaurantName || lead.leadId}`);
+  }
+
+  return enriched;
+}
+
 async function runBatch() {
   const targets = selectedTargets();
   if (targets.length === 0) {
@@ -119,12 +154,19 @@ async function runBatch() {
   console.log(`Scored leads, keeping top ${scored.length} (batch limit ${batchLimit}).`);
 
   const salesEnriched = await enrichPriorityALeads(scored);
-  const enriched = await diagnoseLeads(salesEnriched);
-  const diagnosisPayloadCount = enriched.filter(
+  const diagnosed = await diagnoseLeads(salesEnriched);
+  const enriched = await generateSalesMessagesForLeads(diagnosed);
+  const diagnosisPayloadCount = diagnosed.filter(
     (lead) => lead.diagnosis || lead.diagnosisReport,
+  ).length;
+  const salesMessagePayloadCount = enriched.filter(
+    (lead) => lead.salesMessages || lead.salesMessageReport,
   ).length;
   if (process.env.ENABLE_DIAGNOSIS_AGENT === "true") {
     console.log(`Prepared ${diagnosisPayloadCount} diagnosis payload(s) for Google Sheet.`);
+  }
+  if (process.env.ENABLE_SALES_MESSAGE_AGENT === "true") {
+    console.log(`Prepared ${salesMessagePayloadCount} sales message payload(s) for Google Sheet.`);
   }
 
   console.log("Posting leads to Google Sheet...");

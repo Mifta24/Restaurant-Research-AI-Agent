@@ -1,7 +1,9 @@
 const SHEET_NAME = 'Lead List';
 const DIAGNOSIS_SHEET_NAME = 'Diagnosa Report';
+const SALES_MESSAGE_SHEET_NAME = 'Sales Messages';
 const EXPECTED_COLUMNS = 27;
 const DIAGNOSIS_EXPECTED_COLUMNS = 9;
+const SALES_MESSAGE_EXPECTED_COLUMNS = 15;
 const DEFAULT_SPREADSHEET_ID = '1rwV6Q83zwZeWzxekFo3Qu9B3qC8hi5I6kEz7nEtim8s';
 const DIAGNOSIS_HEADERS = [
   'No',
@@ -13,6 +15,23 @@ const DIAGNOSIS_HEADERS = [
   'Improvement Suggestion',
   'Recommended FTS Service',
   'Priority',
+];
+const SALES_MESSAGE_HEADERS = [
+  'No',
+  'Created At',
+  'Lead ID',
+  'Restaurant Name',
+  'Recommended FTS Service',
+  'Personalization Signal',
+  'Outreach Angle',
+  'WhatsApp ID',
+  'Instagram DM ID',
+  'Email Subject ID',
+  'Email Body ID',
+  'WhatsApp EN',
+  'Instagram DM EN',
+  'Email Subject EN',
+  'Email Body EN',
 ];
 
 function doPost(e) {
@@ -42,6 +61,7 @@ function doPost(e) {
     );
     const duplicatesSkipped = cleanLeads.length - newLeads.length;
     const diagnosisRowsWritten = writeDiagnosisReports(cleanLeads);
+    const salesMessageRowsWritten = writeSalesMessages(cleanLeads);
 
     if (newLeads.length === 0) {
       return jsonResponse({
@@ -49,6 +69,7 @@ function doPost(e) {
         inserted: 0,
         duplicatesSkipped,
         diagnosisRowsWritten,
+        salesMessageRowsWritten,
       });
     }
 
@@ -61,6 +82,7 @@ function doPost(e) {
       inserted: rows.length,
       duplicatesSkipped,
       diagnosisRowsWritten,
+      salesMessageRowsWritten,
       startRow,
     });
   } catch (error) {
@@ -102,6 +124,40 @@ function writeDiagnosisReports(leads) {
   return rowsWritten;
 }
 
+function writeSalesMessages(leads) {
+  const messageLeads = leads.filter((lead) => lead.salesMessages || lead.salesMessageReport);
+  if (messageLeads.length === 0) return 0;
+
+  const sheet = getOrCreateSalesMessageSheet();
+  const existingLeadRows = getExistingSalesMessageLeadRows(sheet);
+  let rowsWritten = 0;
+  const newMessageLeads = [];
+
+  messageLeads.forEach((lead) => {
+    const existingRow = lead.leadId ? existingLeadRows[String(lead.leadId)] : null;
+    if (!existingRow) {
+      newMessageLeads.push(lead);
+      return;
+    }
+
+    sheet.getRange(existingRow, 1, 1, SALES_MESSAGE_EXPECTED_COLUMNS).setValues([
+      mapSalesMessageToRow(lead, existingRow),
+    ]);
+    rowsWritten += 1;
+  });
+
+  if (newMessageLeads.length > 0) {
+    const startRow = findFirstEmptySalesMessageRow(sheet);
+    const rows = newMessageLeads.map((lead, index) => mapSalesMessageToRow(lead, startRow + index));
+    sheet.getRange(startRow, 1, rows.length, SALES_MESSAGE_EXPECTED_COLUMNS).setValues(rows);
+    rowsWritten += rows.length;
+  }
+
+  applySalesMessageSheetDesign(sheet);
+
+  return rowsWritten;
+}
+
 function getOrCreateDiagnosisSheet() {
   const spreadsheet = getTargetSpreadsheet();
   let sheet = spreadsheet.getSheetByName(DIAGNOSIS_SHEET_NAME);
@@ -118,6 +174,26 @@ function getOrCreateDiagnosisSheet() {
   }
 
   applyDiagnosisSheetDesign(sheet);
+
+  return sheet;
+}
+
+function getOrCreateSalesMessageSheet() {
+  const spreadsheet = getTargetSpreadsheet();
+  let sheet = spreadsheet.getSheetByName(SALES_MESSAGE_SHEET_NAME);
+
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(SALES_MESSAGE_SHEET_NAME);
+  }
+
+  const firstRow = sheet.getRange(1, 1, 1, SALES_MESSAGE_EXPECTED_COLUMNS).getValues()[0];
+  const hasHeader = firstRow.some((value) => Boolean(value));
+
+  if (!hasHeader) {
+    sheet.getRange(1, 1, 1, SALES_MESSAGE_EXPECTED_COLUMNS).setValues([SALES_MESSAGE_HEADERS]);
+  }
+
+  applySalesMessageSheetDesign(sheet);
 
   return sheet;
 }
@@ -161,6 +237,51 @@ function applyDiagnosisSheetDesign(sheet) {
   }
 }
 
+function applySalesMessageSheetDesign(sheet) {
+  sheet.setFrozenRows(1);
+  sheet.getRange(1, 1, 1, SALES_MESSAGE_EXPECTED_COLUMNS).setValues([SALES_MESSAGE_HEADERS]);
+
+  const headerRange = sheet.getRange(1, 1, 1, SALES_MESSAGE_EXPECTED_COLUMNS);
+  headerRange
+    .setBackground('#0F5132')
+    .setFontColor('#FFFFFF')
+    .setFontWeight('bold')
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle')
+    .setWrap(true);
+
+  sheet.setRowHeight(1, 46);
+  sheet.setColumnWidth(1, 48);
+  sheet.setColumnWidth(2, 150);
+  sheet.setColumnWidth(3, 180);
+  sheet.setColumnWidth(4, 220);
+  sheet.setColumnWidth(5, 170);
+  sheet.setColumnWidth(6, 320);
+  sheet.setColumnWidth(7, 320);
+  sheet.setColumnWidth(8, 420);
+  sheet.setColumnWidth(9, 420);
+  sheet.setColumnWidth(10, 240);
+  sheet.setColumnWidth(11, 520);
+  sheet.setColumnWidth(12, 420);
+  sheet.setColumnWidth(13, 420);
+  sheet.setColumnWidth(14, 240);
+  sheet.setColumnWidth(15, 520);
+
+  const lastRow = Math.max(sheet.getLastRow(), 2);
+  const bodyRange = sheet.getRange(2, 1, lastRow - 1, SALES_MESSAGE_EXPECTED_COLUMNS);
+  bodyRange
+    .setWrap(true)
+    .setVerticalAlignment('top')
+    .setHorizontalAlignment('left');
+
+  sheet.getRange(2, 1, lastRow - 1, 1).setHorizontalAlignment('center');
+  sheet.getRange(2, 5, lastRow - 1, 1).setHorizontalAlignment('center');
+
+  if (lastRow > 1) {
+    sheet.autoResizeRows(2, lastRow - 1);
+  }
+}
+
 function getExistingDiagnosisLeadRows(sheet) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return {};
@@ -173,7 +294,35 @@ function getExistingDiagnosisLeadRows(sheet) {
   return rowsByLeadId;
 }
 
+function getExistingSalesMessageLeadRows(sheet) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return {};
+
+  const leadIdValues = sheet.getRange(2, 3, lastRow - 1, 1).getValues();
+  const rowsByLeadId = {};
+  leadIdValues.forEach((row, index) => {
+    if (row[0]) rowsByLeadId[String(row[0])] = index + 2;
+  });
+  return rowsByLeadId;
+}
+
 function findFirstEmptyDiagnosisRow(sheet) {
+  const lastRow = Math.max(sheet.getLastRow(), 2);
+  const rowCount = lastRow - 1;
+  const leadIdAndNameValues = sheet.getRange(2, 3, rowCount, 2).getValues();
+
+  for (let index = 0; index < leadIdAndNameValues.length; index += 1) {
+    const leadId = leadIdAndNameValues[index][0];
+    const restaurantName = leadIdAndNameValues[index][1];
+    if (!leadId && !restaurantName) {
+      return index + 2;
+    }
+  }
+
+  return lastRow + 1;
+}
+
+function findFirstEmptySalesMessageRow(sheet) {
   const lastRow = Math.max(sheet.getLastRow(), 2);
   const rowCount = lastRow - 1;
   const leadIdAndNameValues = sheet.getRange(2, 3, rowCount, 2).getValues();
@@ -271,6 +420,28 @@ function mapDiagnosisToRow(lead, rowNumber) {
   ];
 }
 
+function mapSalesMessageToRow(lead, rowNumber) {
+  const messages = lead.salesMessages || parseSalesMessageReport(lead.salesMessageReport || '');
+
+  return [
+    rowNumber - 1,
+    lead.createdAt || new Date().toISOString(),
+    lead.leadId || '',
+    messages.restaurantName || lead.restaurantName || '',
+    messages.recommendedFtsService || lead.recommendedService || '',
+    messages.personalizationSignal || '',
+    messages.outreachAngle || '',
+    messages.whatsappId || '',
+    messages.instagramDmId || '',
+    messages.emailSubjectId || '',
+    messages.emailBodyId || '',
+    messages.whatsappEn || '',
+    messages.instagramDmEn || '',
+    messages.emailSubjectEn || '',
+    messages.emailBodyEn || '',
+  ];
+}
+
 function parseDiagnosisReport(report) {
   const diagnosis = {};
   String(report || '').split('\n').forEach((line) => {
@@ -288,6 +459,31 @@ function parseDiagnosisReport(report) {
     if (key === 'priority') diagnosis.priority = value;
   });
   return diagnosis;
+}
+
+function parseSalesMessageReport(report) {
+  const messages = {};
+  String(report || '').split('\n').forEach((line) => {
+    const separatorIndex = line.indexOf(':');
+    if (separatorIndex === -1) return;
+
+    const key = line.slice(0, separatorIndex).trim().toLowerCase();
+    const value = line.slice(separatorIndex + 1).trim();
+
+    if (key === 'restaurant name') messages.restaurantName = value;
+    if (key === 'recommended fts service') messages.recommendedFtsService = value;
+    if (key === 'personalization signal') messages.personalizationSignal = value;
+    if (key === 'outreach angle') messages.outreachAngle = value;
+    if (key === 'whatsapp id') messages.whatsappId = value;
+    if (key === 'instagram dm id') messages.instagramDmId = value;
+    if (key === 'email subject id') messages.emailSubjectId = value;
+    if (key === 'email body id') messages.emailBodyId = value;
+    if (key === 'whatsapp en') messages.whatsappEn = value;
+    if (key === 'instagram dm en') messages.instagramDmEn = value;
+    if (key === 'email subject en') messages.emailSubjectEn = value;
+    if (key === 'email body en') messages.emailBodyEn = value;
+  });
+  return messages;
 }
 
 function jsonResponse(body, statusCode) {
