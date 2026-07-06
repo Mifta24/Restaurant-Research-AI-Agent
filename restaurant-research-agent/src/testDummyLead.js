@@ -31,6 +31,30 @@ const dummyLead = {
   nextFollowUpDate: "",
   replyNotes: "Boleh, kirim detailnya.",
   sourceUrl: "https://example.com/dummy-lead",
+  leadResearch: {
+    restaurantName: "Dummy Jakarta Restaurant",
+    searchQuery:
+      "Dummy Jakarta Restaurant Kemang restaurant website instagram whatsapp menu reservation",
+    searchSummary:
+      "No external search provider result was collected. Analysis uses the existing lead data and website probe only.",
+    websiteFinding:
+      "No official website is available in the collected data.",
+    snsFinding:
+      "Instagram/SNS presence still needs search or manual review.",
+    whatsappFinding:
+      "WhatsApp or phone contact is available in the collected data.",
+    menuReservationFinding:
+      "Menu and reservation flow still need manual review.",
+    opportunitySignals: [
+      "No official website is available in the collected data.",
+      "Instagram presence needs search/manual check.",
+    ],
+    riskLevel: "Medium",
+    recommendedNextStep:
+      "Review the evidence links, verify official channels, then continue with diagnosis and outreach only if the restaurant is relevant.",
+    confidence: "Low",
+    evidenceLinks: [],
+  },
   diagnosis: {
     restaurantName: "Dummy Jakarta Restaurant",
     currentSituation:

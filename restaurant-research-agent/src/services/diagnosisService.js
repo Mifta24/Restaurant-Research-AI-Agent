@@ -278,14 +278,16 @@ async function diagnoseRestaurant(lead) {
   const response = await requestChatCompletion({
     model:
       process.env.DIAGNOSIS_MODEL ||
+      process.env.AI_MODEL ||
       process.env.OPENROUTER_MODEL ||
       "openai/gpt-4o-mini",
     fallbackModel:
       process.env.DIAGNOSIS_FALLBACK_MODEL ||
+      process.env.AI_FALLBACK_MODEL ||
       process.env.OPENROUTER_FALLBACK_MODEL,
     messages: buildDiagnosisPrompt(lead, fallback),
     temperature: Number(process.env.DIAGNOSIS_TEMPERATURE || 0.2),
-    maxTokens: Number(process.env.DIAGNOSIS_MAX_TOKENS || 700),
+    maxTokens: Number(process.env.DIAGNOSIS_MAX_TOKENS || 1200),
     metadata: {
       agent: "restaurant-diagnosis-agent",
       purpose: "restaurant-marketing-diagnosis",

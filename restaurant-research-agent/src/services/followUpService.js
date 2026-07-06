@@ -263,14 +263,16 @@ async function classifyFollowUpReply(lead) {
   const response = await requestChatCompletion({
     model:
       process.env.FOLLOW_UP_MODEL ||
+      process.env.AI_MODEL ||
       process.env.OPENROUTER_MODEL ||
       "openai/gpt-4o-mini",
     fallbackModel:
       process.env.FOLLOW_UP_FALLBACK_MODEL ||
+      process.env.AI_FALLBACK_MODEL ||
       process.env.OPENROUTER_FALLBACK_MODEL,
     messages: buildFollowUpPrompt(lead, fallback),
     temperature: Number(process.env.FOLLOW_UP_TEMPERATURE || 0.2),
-    maxTokens: Number(process.env.FOLLOW_UP_MAX_TOKENS || 800),
+    maxTokens: Number(process.env.FOLLOW_UP_MAX_TOKENS || 1200),
     metadata: {
       agent: "follow-up-agent",
       purpose: "restaurant-reply-classification-next-action",

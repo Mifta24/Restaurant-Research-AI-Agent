@@ -219,14 +219,16 @@ async function generateSalesMessages(lead) {
   const response = await requestChatCompletion({
     model:
       process.env.SALES_MESSAGE_MODEL ||
+      process.env.AI_MODEL ||
       process.env.OPENROUTER_MODEL ||
       "openai/gpt-4o-mini",
     fallbackModel:
       process.env.SALES_MESSAGE_FALLBACK_MODEL ||
+      process.env.AI_FALLBACK_MODEL ||
       process.env.OPENROUTER_FALLBACK_MODEL,
     messages: buildSalesMessagePrompt(lead, fallback),
     temperature: Number(process.env.SALES_MESSAGE_TEMPERATURE || 0.45),
-    maxTokens: Number(process.env.SALES_MESSAGE_MAX_TOKENS || 1200),
+    maxTokens: Number(process.env.SALES_MESSAGE_MAX_TOKENS || 2200),
     metadata: {
       agent: "sales-message-agent",
       purpose: "restaurant-outreach-message-variants",

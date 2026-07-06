@@ -5,6 +5,7 @@ Business-first Jakarta restaurant lead research agent for FTS.
 ## Agents
 
 - Agent 1: Restaurant research and lead scoring batch agent.
+- Agent 1.5: AI lead research and web evidence agent.
 - Agent 2: Restaurant diagnosis analyst agent.
 - Agent 3: Sales message copywriter agent.
 - Agent 4: Follow-up reply classifier and next-action agent.
@@ -56,9 +57,106 @@ Default first batch:
 - Limit: 50 leads
 - AI notes: disabled until `ENABLE_AI_NOTES=true`
 
+## Local AI Setup: LM Studio
+
+This project can use any OpenAI-compatible chat completions API. For the local
+LM Studio server at `http://192.168.1.105:1234`, configure `.env`:
+
+```bash
+AI_BASE_URL=http://192.168.1.105:1234
+AI_API_KEY=lm-studio
+AI_MODEL=google/gemma-4-26b-a4b-qat
+AI_FALLBACK_MODEL=
+AI_TIMEOUT_MS=120000
+```
+
+`AI_BASE_URL` can be either the server root (`http://192.168.1.105:1234`), the
+OpenAI-compatible base path (`http://192.168.1.105:1234/v1`), or the full chat
+completions URL. The agent normalizes it to `/v1/chat/completions`.
+
+The older `OPENROUTER_*` variables still work if you want to switch back to
+OpenRouter later, but `AI_*` takes priority.
+
+## Agent 1.5: AI Lead Research Agent
+
+Agent 1 still collects restaurant candidates from Overpass/OpenStreetMap and
+scores them with deterministic rules. Agent 1.5 runs after that scoring step and
+before diagnosis. Its job is to add AI-assisted research signals from:
+
+- existing Overpass lead data
+- website URL probe when a website URL exists
+- optional external search results from Serper, Brave Search, or Tavily
+- LM Studio/Gemma analysis over the collected evidence
+
+Important: LM Studio does not browse by itself. Node.js performs the search/check
+work, then Gemma summarizes and qualifies the evidence.
+
+The output is sent to the Google Sheet tab `AI Lead Research`. If the tab does
+not exist, the Apps Script webhook creates it with these columns:
+
+- `No`
+- `Created At`
+- `Lead ID`
+- `Restaurant Name`
+- `Search Query`
+- `Search Summary`
+- `Website Finding`
+- `SNS Finding`
+- `WhatsApp Finding`
+- `Menu/Reservation Finding`
+- `Opportunity Signals`
+- `Risk Level`
+- `Recommended Next Step`
+- `Confidence`
+- `Evidence Links`
+
+Configure `.env`:
+
+```bash
+ENABLE_LEAD_RESEARCH_AGENT=true
+LEAD_RESEARCH_USE_AI=true
+LEAD_RESEARCH_MODEL=google/gemma-4-26b-a4b-qat
+LEAD_RESEARCH_FALLBACK_MODEL=
+LEAD_RESEARCH_MAX_LEADS=20
+LEAD_RESEARCH_TEMPERATURE=0.2
+LEAD_RESEARCH_MAX_TOKENS=1400
+LEAD_RESEARCH_ENABLE_WEB_SEARCH=false
+LEAD_RESEARCH_CHECK_WEBSITE=true
+LEAD_RESEARCH_SEARCH_RESULTS=5
+```
+
+Optional real web search providers:
+
+```bash
+SERPER_API_KEY=
+BRAVE_SEARCH_API_KEY=
+TAVILY_API_KEY=
+```
+
+Set `LEAD_RESEARCH_ENABLE_WEB_SEARCH=true` after one of those API keys is filled.
+Without a search API key, Agent 1.5 still runs using the existing lead data and
+website probe.
+
+Run a local Agent 1.5 test:
+
+```bash
+npm run test:lead-research -- "Dummy Jakarta Restaurant"
+```
+
+Run a batch with lead research enabled:
+
+```bash
+npm run batch
+```
+
+After changing `apps-script/Code.gs`, redeploy the Apps Script web app so the
+Sheet webhook can write to `AI Lead Research`.
+
 ## Agent 2: Restaurant Diagnosis Agent
 
-Agent 2 runs after restaurant data is collected and scored. Its job is to diagnose the restaurant's current digital marketing condition, not just list the restaurant name.
+Agent 2 runs after restaurant data is collected, scored, and optionally enriched
+by Agent 1.5. Its job is to diagnose the restaurant's current digital marketing
+condition, not just list the restaurant name.
 
 It checks the available lead signals:
 
@@ -102,12 +200,15 @@ Recommended FTS service values:
 Configure `.env`:
 
 ```bash
-OPENROUTER_API_KEY=your-project-testing-key
+AI_BASE_URL=http://192.168.1.105:1234
+AI_API_KEY=lm-studio
+AI_MODEL=google/gemma-4-26b-a4b-qat
 ENABLE_DIAGNOSIS_AGENT=true
 DIAGNOSIS_USE_AI=true
-DIAGNOSIS_MODEL=openai/gpt-4o-mini
+DIAGNOSIS_MODEL=google/gemma-4-26b-a4b-qat
 DIAGNOSIS_FALLBACK_MODEL=
 DIAGNOSIS_MAX_LEADS=20
+DIAGNOSIS_MAX_TOKENS=1200
 ```
 
 Run a local diagnosis test:
@@ -162,12 +263,13 @@ Configure `.env`:
 ```bash
 ENABLE_SALES_MESSAGE_AGENT=true
 SALES_MESSAGE_USE_AI=true
-SALES_MESSAGE_MODEL=openai/gpt-4o-mini
+SALES_MESSAGE_MODEL=google/gemma-4-26b-a4b-qat
 SALES_MESSAGE_FALLBACK_MODEL=
 SALES_MESSAGE_MAX_LEADS=20
+SALES_MESSAGE_MAX_TOKENS=2200
 ```
 
-`SALES_MESSAGE_USE_AI=false` or a missing `OPENROUTER_API_KEY` will use the local fallback message generator, so the workflow can still produce usable outreach drafts.
+`SALES_MESSAGE_USE_AI=false` or a missing AI provider configuration will use the local fallback message generator, so the workflow can still produce usable outreach drafts.
 
 Run a local Agent 3 test:
 
@@ -235,14 +337,14 @@ Configure `.env`:
 ```bash
 ENABLE_FOLLOW_UP_AGENT=true
 FOLLOW_UP_USE_AI=true
-FOLLOW_UP_MODEL=openai/gpt-4o-mini
+FOLLOW_UP_MODEL=google/gemma-4-26b-a4b-qat
 FOLLOW_UP_FALLBACK_MODEL=
 FOLLOW_UP_MAX_LEADS=20
 FOLLOW_UP_TEMPERATURE=0.2
-FOLLOW_UP_MAX_TOKENS=800
+FOLLOW_UP_MAX_TOKENS=1200
 ```
 
-`FOLLOW_UP_USE_AI=false` or a missing `OPENROUTER_API_KEY` will use the local fallback classifier, so reply classification still works for common Indonesian and English responses.
+`FOLLOW_UP_USE_AI=false` or a missing AI provider configuration will use the local fallback classifier, so reply classification still works for common Indonesian and English responses.
 
 Run a local Agent 4 test:
 
@@ -266,7 +368,11 @@ Node.js Agent -> Apps Script Webhook -> Lead List sheet
 ```
 
 ```text
-Collected Restaurant Lead -> Diagnosis Agent -> Google Sheet diagnosis columns
+Scored Restaurant Lead -> AI Lead Research Agent -> Google Sheet research evidence
+```
+
+```text
+AI-researched Restaurant Lead -> Diagnosis Agent -> Google Sheet diagnosis columns
 ```
 
 ```text

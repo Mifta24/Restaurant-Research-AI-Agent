@@ -1,12 +1,31 @@
 const SHEET_NAME = 'Lead List';
+const LEAD_RESEARCH_SHEET_NAME = 'AI Lead Research';
 const DIAGNOSIS_SHEET_NAME = 'Diagnosa Report';
 const SALES_MESSAGE_SHEET_NAME = 'Sales Messages';
 const FOLLOW_UP_SHEET_NAME = 'Follow Up Actions';
 const EXPECTED_COLUMNS = 27;
+const LEAD_RESEARCH_EXPECTED_COLUMNS = 15;
 const DIAGNOSIS_EXPECTED_COLUMNS = 9;
 const SALES_MESSAGE_EXPECTED_COLUMNS = 15;
 const FOLLOW_UP_EXPECTED_COLUMNS = 12;
 const DEFAULT_SPREADSHEET_ID = '1rwV6Q83zwZeWzxekFo3Qu9B3qC8hi5I6kEz7nEtim8s';
+const LEAD_RESEARCH_HEADERS = [
+  'No',
+  'Created At',
+  'Lead ID',
+  'Restaurant Name',
+  'Search Query',
+  'Search Summary',
+  'Website Finding',
+  'SNS Finding',
+  'WhatsApp Finding',
+  'Menu/Reservation Finding',
+  'Opportunity Signals',
+  'Risk Level',
+  'Recommended Next Step',
+  'Confidence',
+  'Evidence Links',
+];
 const DIAGNOSIS_HEADERS = [
   'No',
   'Created At',
@@ -76,6 +95,7 @@ function doPost(e) {
       (lead) => !lead.leadId || !existingLeadIds.has(String(lead.leadId)),
     );
     const duplicatesSkipped = cleanLeads.length - newLeads.length;
+    const leadResearchRowsWritten = writeLeadResearch(cleanLeads);
     const diagnosisRowsWritten = writeDiagnosisReports(cleanLeads);
     const salesMessageRowsWritten = writeSalesMessages(cleanLeads);
     const followUpRowsWritten = writeFollowUps(cleanLeads);
@@ -85,6 +105,7 @@ function doPost(e) {
         ok: true,
         inserted: 0,
         duplicatesSkipped,
+        leadResearchRowsWritten,
         diagnosisRowsWritten,
         salesMessageRowsWritten,
         followUpRowsWritten,
@@ -99,6 +120,7 @@ function doPost(e) {
       ok: true,
       inserted: rows.length,
       duplicatesSkipped,
+      leadResearchRowsWritten,
       diagnosisRowsWritten,
       salesMessageRowsWritten,
       followUpRowsWritten,
@@ -107,6 +129,40 @@ function doPost(e) {
   } catch (error) {
     return jsonResponse({ ok: false, error: String(error) }, 500);
   }
+}
+
+function writeLeadResearch(leads) {
+  const researchLeads = leads.filter((lead) => lead.leadResearch || lead.leadResearchReport);
+  if (researchLeads.length === 0) return 0;
+
+  const sheet = getOrCreateLeadResearchSheet();
+  const existingLeadRows = getExistingLeadResearchLeadRows(sheet);
+  let rowsWritten = 0;
+  const newResearchLeads = [];
+
+  researchLeads.forEach((lead) => {
+    const existingRow = lead.leadId ? existingLeadRows[String(lead.leadId)] : null;
+    if (!existingRow) {
+      newResearchLeads.push(lead);
+      return;
+    }
+
+    sheet.getRange(existingRow, 1, 1, LEAD_RESEARCH_EXPECTED_COLUMNS).setValues([
+      mapLeadResearchToRow(lead, existingRow),
+    ]);
+    rowsWritten += 1;
+  });
+
+  if (newResearchLeads.length > 0) {
+    const startRow = findFirstEmptyLeadResearchRow(sheet);
+    const rows = newResearchLeads.map((lead, index) => mapLeadResearchToRow(lead, startRow + index));
+    sheet.getRange(startRow, 1, rows.length, LEAD_RESEARCH_EXPECTED_COLUMNS).setValues(rows);
+    rowsWritten += rows.length;
+  }
+
+  applyLeadResearchSheetDesign(sheet);
+
+  return rowsWritten;
 }
 
 function writeDiagnosisReports(leads) {
@@ -211,6 +267,26 @@ function writeFollowUps(leads) {
   return rowsWritten;
 }
 
+function getOrCreateLeadResearchSheet() {
+  const spreadsheet = getTargetSpreadsheet();
+  let sheet = spreadsheet.getSheetByName(LEAD_RESEARCH_SHEET_NAME);
+
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(LEAD_RESEARCH_SHEET_NAME);
+  }
+
+  const firstRow = sheet.getRange(1, 1, 1, LEAD_RESEARCH_EXPECTED_COLUMNS).getValues()[0];
+  const hasHeader = firstRow.some((value) => Boolean(value));
+
+  if (!hasHeader) {
+    sheet.getRange(1, 1, 1, LEAD_RESEARCH_EXPECTED_COLUMNS).setValues([LEAD_RESEARCH_HEADERS]);
+  }
+
+  applyLeadResearchSheetDesign(sheet);
+
+  return sheet;
+}
+
 function getOrCreateDiagnosisSheet() {
   const spreadsheet = getTargetSpreadsheet();
   let sheet = spreadsheet.getSheetByName(DIAGNOSIS_SHEET_NAME);
@@ -269,6 +345,51 @@ function getOrCreateFollowUpSheet() {
   applyFollowUpSheetDesign(sheet);
 
   return sheet;
+}
+
+function applyLeadResearchSheetDesign(sheet) {
+  sheet.setFrozenRows(1);
+  sheet.getRange(1, 1, 1, LEAD_RESEARCH_EXPECTED_COLUMNS).setValues([LEAD_RESEARCH_HEADERS]);
+
+  const headerRange = sheet.getRange(1, 1, 1, LEAD_RESEARCH_EXPECTED_COLUMNS);
+  headerRange
+    .setBackground('#5B3A8E')
+    .setFontColor('#FFFFFF')
+    .setFontWeight('bold')
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle')
+    .setWrap(true);
+
+  sheet.setRowHeight(1, 46);
+  sheet.setColumnWidth(1, 48);
+  sheet.setColumnWidth(2, 150);
+  sheet.setColumnWidth(3, 180);
+  sheet.setColumnWidth(4, 220);
+  sheet.setColumnWidth(5, 320);
+  sheet.setColumnWidth(6, 380);
+  sheet.setColumnWidth(7, 360);
+  sheet.setColumnWidth(8, 300);
+  sheet.setColumnWidth(9, 280);
+  sheet.setColumnWidth(10, 340);
+  sheet.setColumnWidth(11, 420);
+  sheet.setColumnWidth(12, 110);
+  sheet.setColumnWidth(13, 420);
+  sheet.setColumnWidth(14, 110);
+  sheet.setColumnWidth(15, 420);
+
+  const lastRow = Math.max(sheet.getLastRow(), 2);
+  const bodyRange = sheet.getRange(2, 1, lastRow - 1, LEAD_RESEARCH_EXPECTED_COLUMNS);
+  bodyRange
+    .setWrap(true)
+    .setVerticalAlignment('top')
+    .setHorizontalAlignment('left');
+
+  sheet.getRange(2, 1, lastRow - 1, 1).setHorizontalAlignment('center');
+  sheet.getRange(2, 12, lastRow - 1, 3).setHorizontalAlignment('center');
+
+  if (lastRow > 1) {
+    sheet.autoResizeRows(2, lastRow - 1);
+  }
 }
 
 function applyDiagnosisSheetDesign(sheet) {
@@ -410,6 +531,18 @@ function getExistingDiagnosisLeadRows(sheet) {
   return rowsByLeadId;
 }
 
+function getExistingLeadResearchLeadRows(sheet) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return {};
+
+  const leadIdValues = sheet.getRange(2, 3, lastRow - 1, 1).getValues();
+  const rowsByLeadId = {};
+  leadIdValues.forEach((row, index) => {
+    if (row[0]) rowsByLeadId[String(row[0])] = index + 2;
+  });
+  return rowsByLeadId;
+}
+
 function getExistingFollowUpLeadRows(sheet) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return {};
@@ -432,6 +565,22 @@ function getExistingSalesMessageLeadRows(sheet) {
     if (row[0]) rowsByLeadId[String(row[0])] = index + 2;
   });
   return rowsByLeadId;
+}
+
+function findFirstEmptyLeadResearchRow(sheet) {
+  const lastRow = Math.max(sheet.getLastRow(), 2);
+  const rowCount = lastRow - 1;
+  const leadIdAndNameValues = sheet.getRange(2, 3, rowCount, 2).getValues();
+
+  for (let index = 0; index < leadIdAndNameValues.length; index += 1) {
+    const leadId = leadIdAndNameValues[index][0];
+    const restaurantName = leadIdAndNameValues[index][1];
+    if (!leadId && !restaurantName) {
+      return index + 2;
+    }
+  }
+
+  return lastRow + 1;
 }
 
 function findFirstEmptyDiagnosisRow(sheet) {
@@ -548,6 +697,32 @@ function mapLeadToRow(lead, rowNumber) {
   ];
 }
 
+function mapLeadResearchToRow(lead, rowNumber) {
+  const research = lead.leadResearch || parseLeadResearchReport(lead.leadResearchReport || '');
+
+  return [
+    rowNumber - 1,
+    lead.createdAt || new Date().toISOString(),
+    lead.leadId || '',
+    research.restaurantName || lead.restaurantName || '',
+    research.searchQuery || '',
+    research.searchSummary || '',
+    research.websiteFinding || '',
+    research.snsFinding || '',
+    research.whatsappFinding || '',
+    research.menuReservationFinding || '',
+    Array.isArray(research.opportunitySignals)
+      ? research.opportunitySignals.join('\n')
+      : research.opportunitySignals || '',
+    research.riskLevel || '',
+    research.recommendedNextStep || '',
+    research.confidence || '',
+    Array.isArray(research.evidenceLinks)
+      ? research.evidenceLinks.join('\n')
+      : research.evidenceLinks || '',
+  ];
+}
+
 function mapDiagnosisToRow(lead, rowNumber) {
   const diagnosis = lead.diagnosis || parseDiagnosisReport(lead.diagnosisReport || '');
 
@@ -603,6 +778,31 @@ function mapFollowUpToRow(lead, rowNumber) {
     followUp.confidence || '',
     followUp.reason || '',
   ];
+}
+
+function parseLeadResearchReport(report) {
+  const research = {};
+  String(report || '').split('\n').forEach((line) => {
+    const separatorIndex = line.indexOf(':');
+    if (separatorIndex === -1) return;
+
+    const key = line.slice(0, separatorIndex).trim().toLowerCase();
+    const value = line.slice(separatorIndex + 1).trim();
+
+    if (key === 'restaurant name') research.restaurantName = value;
+    if (key === 'search query') research.searchQuery = value;
+    if (key === 'search summary') research.searchSummary = value;
+    if (key === 'website finding') research.websiteFinding = value;
+    if (key === 'sns finding') research.snsFinding = value;
+    if (key === 'whatsapp finding') research.whatsappFinding = value;
+    if (key === 'menu reservation finding') research.menuReservationFinding = value;
+    if (key === 'opportunity signals') research.opportunitySignals = value.split('|').map((item) => item.trim()).filter(Boolean);
+    if (key === 'risk level') research.riskLevel = value;
+    if (key === 'recommended next step') research.recommendedNextStep = value;
+    if (key === 'confidence') research.confidence = value;
+    if (key === 'evidence links') research.evidenceLinks = value.split('|').map((item) => item.trim()).filter(Boolean);
+  });
+  return research;
 }
 
 function parseDiagnosisReport(report) {

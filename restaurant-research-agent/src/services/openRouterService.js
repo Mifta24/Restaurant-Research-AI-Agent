@@ -1,8 +1,40 @@
 const axios = require("axios");
 
-const OPENROUTER_CHAT_COMPLETIONS_URL =
-  process.env.OPENROUTER_BASE_URL ||
+const DEFAULT_OPENROUTER_CHAT_COMPLETIONS_URL =
   "https://openrouter.ai/api/v1/chat/completions";
+
+function trimTrailingSlash(value) {
+  return String(value || "").replace(/\/+$/, "");
+}
+
+function resolveChatCompletionsUrl() {
+  const configuredUrl =
+    process.env.AI_CHAT_COMPLETIONS_URL ||
+    process.env.AI_BASE_URL ||
+    process.env.OPENROUTER_BASE_URL ||
+    DEFAULT_OPENROUTER_CHAT_COMPLETIONS_URL;
+  const normalizedUrl = trimTrailingSlash(configuredUrl);
+
+  if (normalizedUrl.endsWith("/chat/completions")) {
+    return normalizedUrl;
+  }
+
+  if (normalizedUrl.endsWith("/v1")) {
+    return `${normalizedUrl}/chat/completions`;
+  }
+
+  return `${normalizedUrl}/v1/chat/completions`;
+}
+
+function resolveApiKey() {
+  return process.env.AI_API_KEY || process.env.OPENROUTER_API_KEY || "";
+}
+
+function isLocalProviderUrl(url) {
+  return /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/i.test(
+    url,
+  );
+}
 
 function parseAiContent(content) {
   try {
@@ -17,14 +49,19 @@ function parseAiContent(content) {
 }
 
 function hasOpenRouterApiKey() {
-  return Boolean(process.env.OPENROUTER_API_KEY);
+  const chatCompletionsUrl = resolveChatCompletionsUrl();
+  return Boolean(resolveApiKey()) || isLocalProviderUrl(chatCompletionsUrl);
 }
 
 function openRouterHeaders() {
   const headers = {
-    Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
     "Content-Type": "application/json",
   };
+  const apiKey = resolveApiKey();
+
+  if (apiKey) {
+    headers.Authorization = `Bearer ${apiKey}`;
+  }
 
   if (process.env.OPENROUTER_HTTP_REFERER) {
     headers["HTTP-Referer"] = process.env.OPENROUTER_HTTP_REFERER;
@@ -46,11 +83,20 @@ async function requestChatCompletion({
   metadata,
 }) {
   if (!hasOpenRouterApiKey()) {
-    throw new Error("OPENROUTER_API_KEY is not configured.");
+    throw new Error("AI_API_KEY or OPENROUTER_API_KEY is not configured.");
   }
 
-  const selectedModel = model || process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
-  const backupModel = fallbackModel || process.env.OPENROUTER_FALLBACK_MODEL || "";
+  const chatCompletionsUrl = resolveChatCompletionsUrl();
+  const selectedModel =
+    model ||
+    process.env.AI_MODEL ||
+    process.env.OPENROUTER_MODEL ||
+    "openai/gpt-4o-mini";
+  const backupModel =
+    fallbackModel ||
+    process.env.AI_FALLBACK_MODEL ||
+    process.env.OPENROUTER_FALLBACK_MODEL ||
+    "";
   const body = {
     model: selectedModel,
     messages,
@@ -66,9 +112,11 @@ async function requestChatCompletion({
   }
 
   try {
-    const response = await axios.post(OPENROUTER_CHAT_COMPLETIONS_URL, body, {
+    const response = await axios.post(chatCompletionsUrl, body, {
       headers: openRouterHeaders(),
-      timeout: Number(process.env.OPENROUTER_TIMEOUT_MS || 45000),
+      timeout: Number(
+        process.env.AI_TIMEOUT_MS || process.env.OPENROUTER_TIMEOUT_MS || 45000,
+      ),
     });
 
     return {
@@ -82,18 +130,22 @@ async function requestChatCompletion({
     }
 
     console.warn(
-      `OpenRouter primary model failed (${selectedModel}); retrying with fallback ${backupModel}.`,
+      `AI primary model failed (${selectedModel}); retrying with fallback ${backupModel}.`,
     );
 
     const response = await axios.post(
-      OPENROUTER_CHAT_COMPLETIONS_URL,
+      chatCompletionsUrl,
       {
         ...body,
         model: backupModel,
       },
       {
         headers: openRouterHeaders(),
-        timeout: Number(process.env.OPENROUTER_TIMEOUT_MS || 45000),
+        timeout: Number(
+          process.env.AI_TIMEOUT_MS ||
+            process.env.OPENROUTER_TIMEOUT_MS ||
+            45000,
+        ),
       },
     );
 
@@ -115,8 +167,12 @@ async function generateSalesNotes(lead) {
   }
 
   const response = await requestChatCompletion({
-    model: process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini",
-    fallbackModel: process.env.OPENROUTER_FALLBACK_MODEL,
+    model:
+      process.env.AI_MODEL ||
+      process.env.OPENROUTER_MODEL ||
+      "openai/gpt-4o-mini",
+    fallbackModel:
+      process.env.AI_FALLBACK_MODEL || process.env.OPENROUTER_FALLBACK_MODEL,
     messages: [
       {
         role: "system",
@@ -152,4 +208,5 @@ module.exports = {
   generateSalesNotes,
   hasOpenRouterApiKey,
   requestChatCompletion,
+  resolveChatCompletionsUrl,
 };

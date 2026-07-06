@@ -6,6 +6,10 @@ const { fetchJakartaRestaurants } = require("./services/overpassService");
 const { applyScoring } = require("./services/scoringService");
 const { generateSalesNotes } = require("./services/openRouterService");
 const {
+  researchLead,
+  formatLeadResearch,
+} = require("./services/leadResearchService");
+const {
   diagnoseRestaurant,
   formatDiagnosis,
 } = require("./services/diagnosisService");
@@ -71,6 +75,44 @@ async function enrichPriorityALeads(leads) {
   }
 
   return enriched;
+}
+
+async function researchLeads(leads) {
+  if (process.env.ENABLE_LEAD_RESEARCH_AGENT !== "true") {
+    return leads;
+  }
+
+  const maxResearch = Number(process.env.LEAD_RESEARCH_MAX_LEADS || 20);
+  let generated = 0;
+  const researched = [];
+
+  console.log(`Running AI Lead Research Agent for up to ${Math.min(maxResearch, leads.length)} leads...`);
+
+  for (const lead of leads) {
+    if (generated >= maxResearch) {
+      researched.push(lead);
+      continue;
+    }
+
+    const leadResearch = await researchLead(lead);
+    researched.push({
+      ...lead,
+      leadResearch,
+      leadResearchReport: formatLeadResearch(leadResearch),
+      manualCheck: "Yes",
+      manualCheckNotes: [
+        lead.manualCheckNotes,
+        leadResearch.searchSummary,
+        leadResearch.recommendedNextStep,
+      ]
+        .filter(Boolean)
+        .join(" "),
+    });
+    generated += 1;
+    console.log(`  -> [${generated}/${maxResearch}] lead research generated for ${lead.restaurantName || lead.leadId}`);
+  }
+
+  return researched;
 }
 
 async function diagnoseLeads(leads) {
@@ -196,9 +238,13 @@ async function runBatch() {
   console.log(`Scored leads, keeping top ${scored.length} (batch limit ${batchLimit}).`);
 
   const salesEnriched = await enrichPriorityALeads(scored);
-  const diagnosed = await diagnoseLeads(salesEnriched);
+  const researched = await researchLeads(salesEnriched);
+  const diagnosed = await diagnoseLeads(researched);
   const messageEnriched = await generateSalesMessagesForLeads(diagnosed);
   const enriched = await classifyFollowUpsForLeads(messageEnriched);
+  const leadResearchPayloadCount = researched.filter(
+    (lead) => lead.leadResearch || lead.leadResearchReport,
+  ).length;
   const diagnosisPayloadCount = diagnosed.filter(
     (lead) => lead.diagnosis || lead.diagnosisReport,
   ).length;
@@ -208,6 +254,9 @@ async function runBatch() {
   const followUpPayloadCount = enriched.filter(
     (lead) => lead.followUp || lead.followUpReport,
   ).length;
+  if (process.env.ENABLE_LEAD_RESEARCH_AGENT === "true") {
+    console.log(`Prepared ${leadResearchPayloadCount} lead research payload(s) for Google Sheet.`);
+  }
   if (process.env.ENABLE_DIAGNOSIS_AGENT === "true") {
     console.log(`Prepared ${diagnosisPayloadCount} diagnosis payload(s) for Google Sheet.`);
   }
